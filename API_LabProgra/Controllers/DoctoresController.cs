@@ -10,6 +10,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Security.Claims;
 
+
 namespace API_LabProgra.Controllers
 {
     [Route("api/[controller]")]
@@ -44,6 +45,33 @@ namespace API_LabProgra.Controllers
                 return StatusCode(500, "Error interno del servidor");
             }
         }
+        [HttpGet("Areas")]
+        [Authorize] // Cualquier usuario autenticado
+        public async Task<ActionResult<IEnumerable<AreasMedica>>> GetAllAreas()
+        {
+            try
+            {
+                var areas = await _context.AreasMedicas.ToListAsync();
+
+                if (areas == null || !areas.Any())
+                {
+                    return NotFound("No se encontraron áreas médicas");
+                }
+
+                return areas.Select(a => new AreasMedica
+                {
+                    IdArea = a.IdArea,
+                    Nombre = a.Nombre
+                }).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener las áreas médicas");
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
+
+
 
         [HttpGet("Usuario/{idUsuario}")]
         public async Task<ActionResult<DoctorDTO>> GetDoctorByUsuario(int idUsuario)
@@ -86,32 +114,6 @@ namespace API_LabProgra.Controllers
             }
         }
 
-        [HttpGet("Area/{areaId}")]
-        [Authorize] // Cualquier usuario autenticado
-        public async Task<ActionResult<IEnumerable<DoctorDTO>>> GetDoctoresByArea(int areaId)
-        {
-            try
-            {
-                var areaExists = await _context.AreasMedicas.AnyAsync(a => a.IdArea == areaId);
-                if (!areaExists)
-                {
-                    return NotFound($"Área médica con ID {areaId} no encontrada");
-                }
-
-                var doctores = await _context.Doctores
-                    .Include(d => d.IdAreaNavigation)
-                    .Include(d => d.IdUsuarioNavigation)
-                    .Where(d => d.IdArea == areaId)
-                    .ToListAsync();
-
-                return doctores.Select(d => DoctorDTO.FromEntity(d)).ToList();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al obtener doctores por área {AreaId}", areaId);
-                return StatusCode(500, "Error interno del servidor");
-            }
-        }
 
     }
 
