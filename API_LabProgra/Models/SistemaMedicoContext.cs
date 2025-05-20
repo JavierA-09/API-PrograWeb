@@ -76,7 +76,7 @@ public partial class SistemaMedicoContext : DbContext
 
             entity.HasOne(d => d.IdUsuarioNavigation).WithMany(p => p.Cita)
                 .HasForeignKey(d => d.IdUsuario)
-                .OnDelete(DeleteBehavior.ClientSetNull)
+                .OnDelete(DeleteBehavior.Cascade) 
                 .HasConstraintName("FK_Citas_Cuenta");
         });
 
@@ -137,7 +137,7 @@ public partial class SistemaMedicoContext : DbContext
 
             entity.HasOne(d => d.IdUsuarioNavigation).WithMany(p => p.Doctores)
                 .HasForeignKey(d => d.IdUsuario)
-                .OnDelete(DeleteBehavior.ClientSetNull)
+                .OnDelete(DeleteBehavior.Cascade) 
                 .HasConstraintName("FK_Doctores_Cuenta");
         });
 
@@ -178,7 +178,7 @@ public partial class SistemaMedicoContext : DbContext
 
             entity.HasOne(d => d.IdUsuarioNavigation).WithMany(p => p.HistorialMedicos)
                 .HasForeignKey(d => d.IdUsuario)
-                .OnDelete(DeleteBehavior.ClientSetNull)
+                .OnDelete(DeleteBehavior.Cascade) 
                 .HasConstraintName("FK_Historial_Cuenta");
         });
 
