@@ -9,6 +9,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 
 namespace API_LabProgra.Controllers
 {
@@ -180,36 +181,113 @@ namespace API_LabProgra.Controllers
         {
             if (id != DTOCuenta.IdUsuario)
             {
-                return BadRequest("ID de usuario no coincide");
+                return BadRequest(new { success = false, message = "El ID en la ruta no coincide con el ID del usuario" });
             }
 
             try
             {
+                var usuarioExistente = await _cuentaService.GetUserById(id);
+                if (usuarioExistente == null)
+                {
+                    return NotFound(new { success = false, message = $"Usuario con ID {id} no encontrado" });
+                }
+
+                List<string> erroresValidacion = new List<string>();
+
                 if (!string.IsNullOrEmpty(DTOCuenta.Correo) && !new EmailAddressAttribute().IsValid(DTOCuenta.Correo))
                 {
-                    return BadRequest("El correo electrónico no es válido");
+                    erroresValidacion.Add("El formato del correo electrónico no es válido");
+                }
+
+                if (string.IsNullOrWhiteSpace(DTOCuenta.Nombre))
+                {
+                    erroresValidacion.Add("El nombre es obligatorio");
+                }
+
+                if (string.IsNullOrWhiteSpace(DTOCuenta.Apellidos))
+                {
+                    erroresValidacion.Add("Los apellidos son obligatorios");
+                }
+
+                if (DTOCuenta.Edad <= 0)
+                {
+                    erroresValidacion.Add("La edad debe ser mayor que cero");
+                }
+
+                if (erroresValidacion.Count > 0)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Error de validación",
+                        errors = erroresValidacion
+                    });
                 }
 
                 var cuenta = DTOCuenta.ToEntity();
 
-                if (!string.IsNullOrEmpty(cuenta.Contraseña))
+                if (string.IsNullOrEmpty(cuenta.Contraseña))
                 {
-                    cuenta.Contraseña = HashPassword(cuenta.Contraseña);
+                    cuenta.Contraseña = usuarioExistente.Contraseña; 
+                }
+                else
+                {
+                    cuenta.Contraseña = HashPassword(cuenta.Contraseña); 
                 }
 
                 var resultado = await _cuentaService.UpdateUser(cuenta);
 
                 if (resultado == 0)
                 {
-                    return NotFound($"Usuario con ID {id} no encontrado");
+                    return BadRequest(new { success = false, message = "No se pudo actualizar el usuario" });
                 }
 
-                return NoContent();
+                return Ok(new
+                {
+                    success = true,
+                    message = "Usuario actualizado correctamente",
+                    data = new
+                    {
+                        idUsuario = cuenta.IdUsuario,
+                        nombre = cuenta.Nombre,
+                        apellidos = cuenta.Apellidos,
+                        correo = cuenta.Correo,
+                        rol = cuenta.Rol
+                    }
+                });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error al actualizar cuenta con ID {Id}", id);
-                return StatusCode(500, "Error interno del servidor");
+                if (ex.InnerException != null)
+                {
+                    if (ex.InnerException.Message.Contains("UNIQUE constraint") ||
+                        ex.InnerException.Message.Contains("duplicate key"))
+                    {
+                        string campoConflicto = "un campo único";
+
+                        if (ex.InnerException.Message.ToLower().Contains("correo"))
+                        {
+                            campoConflicto = "correo electrónico";
+                        }
+                        else if (ex.InnerException.Message.ToLower().Contains("usuario"))
+                        {
+                            campoConflicto = "nombre de usuario";
+                        }
+
+                        return BadRequest(new
+                        {
+                            success = false,
+                            message = $"Ya existe una cuenta con este {campoConflicto}"
+                        });
+                    }
+                }
+
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "Error interno del servidor al actualizar el usuario"
+                });
             }
         }
 
@@ -218,22 +296,37 @@ namespace API_LabProgra.Controllers
         {
             try
             {
+                var usuarioExistente = await _cuentaService.GetUserById(id);
+                if (usuarioExistente == null)
+                {
+                    return NotFound(new { success = false, message = $"Usuario con ID {id} no encontrado" });
+                }
+
                 var resultado = await _cuentaService.DeleteUser(id);
 
                 if (resultado == 0)
                 {
-                    return NotFound($"Usuario con ID {id} no encontrado");
+                    return BadRequest(new { success = false, message = "No se pudo eliminar el usuario" });
                 }
 
-                return NoContent();
+                return Ok(new { success = true, message = $"Usuario con ID {id} eliminado correctamente" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error al eliminar cuenta con ID {Id}", id);
-                return StatusCode(500, "Error interno del servidor");
+
+                if (ex.InnerException != null && ex.InnerException.Message.Contains("REFERENCE constraint"))
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "No se puede eliminar este usuario porque tiene registros relacionados (citas, historiales médicos, etc.)"
+                    });
+                }
+
+                return StatusCode(500, new { success = false, message = "Error interno del servidor" });
             }
         }
-
 
         // Método para hashear contraseñas
         private string HashPassword(string password)
