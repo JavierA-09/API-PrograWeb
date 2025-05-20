@@ -187,7 +187,72 @@ namespace API_LabProgra.Controllers
                 return StatusCode(500, "Error interno del servidor");
             }
         }
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateCita(int id, CitaUpdateDTO citaDTO)
+        {
+            try
+            {
+                if (id != citaDTO.IdCita)
+                {
+                    return BadRequest("El ID de la cita no coincide con el proporcionado en la URL");
+                }
+                var cita = await _context.Citas.FindAsync(id);
+                if (cita == null)
+                {
+                    return NotFound($"Cita con ID {id} no encontrada");
+                }
 
+                var doctorExists = await _context.Doctores.AnyAsync(d => d.IdDoctor == citaDTO.IdDoctor);
+                if (!doctorExists)
+                {
+                    return BadRequest($"El doctor con ID {citaDTO.IdDoctor} no existe");
+                }
+
+                var pacienteExists = await _context.Cuenta.AnyAsync(u => u.IdUsuario == citaDTO.IdUsuario);
+                if (!pacienteExists)
+                {
+                    return BadRequest($"El paciente con ID {citaDTO.IdUsuario} no existe");
+                }
+
+                var estadoExists = await _context.EstadoCita.AnyAsync(e => e.IdEstado == citaDTO.EstadoCita);
+                if (!estadoExists)
+                {
+                    return BadRequest($"El estado de cita con ID {citaDTO.EstadoCita} no existe");
+                }
+
+                cita.IdDoctor = citaDTO.IdDoctor;
+                cita.IdUsuario = citaDTO.IdUsuario;
+                cita.FechaHora = citaDTO.FechaHora;
+                cita.EstadoCita = citaDTO.EstadoCita;
+                if (citaDTO.Notas != null)
+                {
+                    cita.Notas = citaDTO.Notas;
+                }
+
+                if (citaDTO.EstadoCita == 3)
+                {
+                    if (!cita.FechaCalificacion.HasValue)
+                    {
+                        cita.FechaCalificacion = DateTime.Now;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                var citaActualizada = await _context.Citas
+                    .Include(c => c.IdDoctorNavigation)
+                        .ThenInclude(d => d.IdUsuarioNavigation)
+                    .Include(c => c.IdUsuarioNavigation)
+                    .Include(c => c.EstadoCitaNavigation)
+                    .FirstOrDefaultAsync(c => c.IdCita == id);
+
+                return Ok(CitaDTO.FromEntity(citaActualizada));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al actualizar cita con ID {Id}", id);
+                return StatusCode(500, "Error interno del servidor");
+            }
+        }
 
         [HttpPatch("{id}/Estado/{estadoId}")]
         public async Task<IActionResult> UpdateEstadoCita(int id, int estadoId)
