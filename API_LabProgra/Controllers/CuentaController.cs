@@ -49,7 +49,7 @@ namespace API_LabProgra.Controllers
         }
 
         [HttpGet("{id}")]
-        [Authorize] 
+        [Authorize(Policy = "DoctorOnly")]
         public async Task<ActionResult<DTOCuenta>> GetCuenta(int id)
         {
             try
@@ -63,7 +63,7 @@ namespace API_LabProgra.Controllers
                 var userId = int.Parse(User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "0");
                 var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? "0";
 
-                if (userId != id && userRole != "1") 
+                if (userId != id && userRole != "2") 
                 {
                     return Forbid();
                 }
